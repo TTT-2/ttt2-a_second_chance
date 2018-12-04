@@ -21,7 +21,7 @@ local ASecondChance = {
 	type = "item_passive",
 	material = "vgui/ttt/icon_asc",
 	name = "A Second Chance",
-	desc = "Life for a second time but only with a given Chance. \nYour Chance will change per kill.\nIt also works if the round should end.",
+	desc = "Life for a second time but only with a given Chance.\nYour Chance will change per kill.\nIt also works if the round should end.",
 	hud = true
 }
 
@@ -139,20 +139,23 @@ if SERVER then
 		local SecondChanceRandom = math.random(1, 100)
 		local PlayerChance = math.Clamp(math.Round(victim.SecondChanceChance, 0), 0, 99)
 
-		if victim.shouldasc == true and SecondChanceRandom <= PlayerChance then
-			victim.NOWINASC = true
-			victim.ASCTimeLeft = CurTime() + 10
+		if victim.shouldasc then
+			if SecondChanceRandom <= PlayerChance then
+				victim.NOWINASC = true
+				victim.reviving = true
+				victim.ASCTimeLeft = CurTime() + 10
 
-			net.Start("ASCRespawn")
-			net.WriteBit(true)
-			net.Send(victim)
-		elseif victim.shouldasc == true and SecondChanceRandom > PlayerChance then
-			victim.shouldasc = false
+				net.Start("ASCRespawn")
+				net.WriteBit(true)
+				net.Send(victim)
+			else
+				victim.shouldasc = false
 
-			net.Start("ASCRespawn")
-			net.WriteFloat(victim.ASCTimeLeft)
-			net.WriteBool(false)
-			net.Send(victim)
+				net.Start("ASCRespawn")
+				net.WriteFloat(victim.ASCTimeLeft)
+				net.WriteBool(false)
+				net.Send(victim)
+			end
 		end
 	end
 
@@ -232,6 +235,7 @@ if SERVER then
 
 			self.shouldasc = false
 			self.NOWINASC = false
+			self.reviving = false
 
 			timer.Remove("TTTASC" .. self:EntIndex())
 
@@ -270,6 +274,7 @@ if SERVER then
 		self.ASCTimeLeft = 0
 		self.shouldasc = false
 		self.NOWINASC = false
+		self.reviving = false
 
 		local credits = CORPSE.GetCredits(body, 0)
 
@@ -340,6 +345,7 @@ local function ResettinAsc()
 			v.SecondChanceChance = 0
 			v.shouldasc = false
 			v.NOWINASC = false
+			v.reviving = false
 		end
 	end
 end
