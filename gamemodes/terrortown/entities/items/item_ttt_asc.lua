@@ -10,128 +10,47 @@ if SERVER then
 	util.AddNetworkString("ASCRespawned")
 end
 
-local detectiveCanUse = CreateConVar("ttt_secondchance_det", 1, {FCVAR_SERVER_CAN_EXECUTE, FCVAR_ARCHIVE, FCVAR_REPLICATED}, "Should the Detective be able to use the Second Chance.")
-local traitorCanUse = CreateConVar("ttt_secondchance_tr", 1, {FCVAR_SERVER_CAN_EXECUTE, FCVAR_ARCHIVE, FCVAR_REPLICATED}, "Should the Traitor be able to use the Second Chance.")
-
-EQUIP_ASC = (GenerateNewEquipmentID and GenerateNewEquipmentID()) or 8
-
-local ASecondChance = {
-	id = EQUIP_ASC,
-	loadout = false,
+ITEM.hud = Material("vgui/ttt/perks/hud_asc.png")
+ITEM.EquipMenuData = {
 	type = "item_passive",
-	material = "vgui/ttt/icon_asc",
 	name = "A Second Chance",
-	desc = "Life for a second time but only with a given Chance.\nYour Chance will change per kill.\nIt also works if the round should end.",
-	hud = true
+	desc = "Life for a second time but only with a given Chance.\nYour Chance will change per kill.\nIt also works if the round should end."
 }
-
-if detectiveCanUse:GetBool() then
-	table.insert(EquipmentItems[ROLE_DETECTIVE], ASecondChance)
-end
-
-if traitorCanUse:GetBool() then
-	table.insert(EquipmentItems[ROLE_TRAITOR], ASecondChance)
-end
-
-hook.Add("Initialize", "TTTASCCheckForTTTVersion", function()
-	if CLIENT then
-		local material = Material("vgui/ttt/perks/hud_asc.png")
-
-		if not TTT2 then
-			-- feel for to use this function for your own perk, but please credit Zaratusa
-			-- your perk needs a "hud = true" in the table, to work properly
-			local defaultY = ScrH() * 0.5 + 20
-
-			local function getYCoordinate(currentPerkID)
-				local amount, i, perk = 0, 1
-
-				while i < currentPerkID do
-					local role = LocalPlayer():GetRole()
-
-					if role == ROLE_INNOCENT then --he gets it in a special way
-						if GetEquipmentItem(ROLE_TRAITOR, i) then
-							role = ROLE_TRAITOR -- Temp fix what if a perk is just for Detective
-						elseif GetEquipmentItem(ROLE_DETECTIVE, i) then
-							role = ROLE_DETECTIVE
-						end
-					end
-
-					perk = GetEquipmentItem(role, i)
-
-					if istable(perk) and perk.hud and LocalPlayer():HasEquipmentItem(perk.id) then
-						amount = amount + 1
-					end
-
-					i = i * 2
-				end
-
-				return defaultY - 80 * amount
-			end
-
-			local yCoordinate = defaultY
-
-			-- best performance, but the has about 0.5 seconds delay to the HasEquipmentItem() function
-			hook.Add("TTTBoughtItem", "TTTASC2", function()
-				if LocalPlayer():HasEquipmentItem(EQUIP_ASC) then
-					yCoordinate = getYCoordinate(EQUIP_ASC)
-				end
-			end)
-
-			hook.Add("HUDPaint", "TTTASC", function()
-				if LocalPlayer():HasEquipmentItem(EQUIP_ASC) then
-					surface.SetMaterial(material)
-					surface.SetDrawColor(255, 255, 255, 255)
-					surface.DrawTexturedRect(20, yCoordinate, 64, 64)
-				end
-			end)
-		else
-			AddHUDItem(EQUIP_ASC, material)
-		end
-	end
-end)
+ITEM.material = "vgui/ttt/icon_asc"
+ITEM.credits = 2
+ITEM.notBuyable = true
+ITEM.CanBuy = {ROLE_TRAITOR, ROLE_DETECTIVE}
 
 if SERVER then
-	hook.Add("TTTOrderedEquipment", "TTTASC", function(ply, id, is_item)
-		if id == EQUIP_ASC then
-			ply.shouldasc = true
+	function ITEM:Bought(ply)
+		ply.shouldasc = true
 
-			if ply:GetTraitor() or (ply.IsEvil and ply:IsEvil()) then -- just normal Ts for TTT2
-				ply.SecondChanceChance = math.random(25, 35)
-			elseif ply:GetRole() == ROLE_DETECTIVE then
-				ply.SecondChanceChance = math.random(40, 60)
-			else
-				ply.SecondChanceChance = math.random(20, 40)
-			end
+		if ply:GetTraitor() then
+			ply.SecondChanceChance = math.random(25, 35)
+		elseif ply:GetRole() == ROLE_DETECTIVE then
+			ply.SecondChanceChance = math.random(40, 60)
+		else
+			ply.SecondChanceChance = math.random(20, 40)
+		end
 
-			for _, v in ipairs(ply.kills) do
-				local victim = TTT2 and player.GetBySteamID64(v) or player.GetBySteamID(v)
+		for _, v in ipairs(ply.kills) do
+			local victim = player.GetBySteamID64(v)
 
-				if IsValid(victim) then
-					if not TTT2 then
-						if (ply:GetTraitor() or ply.IsEvil and ply:IsEvil()) and ((victim:GetRole() == ROLE_INNOCENT or victim:GetRole() == ROLE_DETECTIVE) or (victim.GetGood and (victim:GetGood() or victim:IsNeutral()))) then
-							ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(10, 20), 0, 99)
-						elseif (ply:GetRole() == ROLE_DETECTIVE or ply:GetRole() == ROLE_INNOCENT or (ply.GetGood and ply:GetGood())) and (victim:GetTraitor() or (victim.IsEvil and (victim:IsEvil() or victim:IsNeutral()))) then
-							ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(20, 30), 0, 99)
-						elseif ply.IsNeutral and ply:IsNeutral() and (victim:GetGood() or victim:GetEvil()) then
-							ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(15, 25), 0, 99)
-						end
-					elseif not victim:IsInTeam(ply) then
-						if ply:GetTraitor() then -- just normal Ts
-							ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(10, 20), 0, 99)
-						elseif ply:HasTeam(TEAM_INNOCENT) then
-							ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(20, 30), 0, 99)
-						else
-							ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(15, 25), 0, 99)
-						end
-					end
+			if IsValid(victim) and not victim:IsInTeam(ply) then
+				if ply:GetTraitor() then -- just normal Ts
+					ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(10, 20), 0, 99)
+				elseif ply:HasTeam(TEAM_INNOCENT) then
+					ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(20, 30), 0, 99)
+				else
+					ply.SecondChanceChance = math.Clamp(ply.SecondChanceChance + math.random(15, 25), 0, 99)
 				end
 			end
-
-			net.Start("ASCBuyed")
-			net.WriteInt(ply.SecondChanceChance, 8)
-			net.Send(ply)
 		end
-	end)
+
+		net.Start("ASCBuyed")
+		net.WriteInt(ply.SecondChanceChance, 8)
+		net.Send(ply)
+	end
 
 	local plymeta = FindMetaTable("Player")
 
@@ -172,7 +91,6 @@ if SERVER then
 			end
 		end
 	end
-
 	hook.Add("Think", "ASCThink", ASCThink)
 
 	local Positions = {}
@@ -306,16 +224,8 @@ if SERVER then
 	end
 
 	local function CheckifAsc(ply, attacker, dmg)
-		if IsValid(attacker) and ply ~= attacker and attacker:IsPlayer() and attacker:HasEquipmentItem(EQUIP_ASC) then
-			if not TTT2 then
-				if (attacker:GetTraitor() or (attacker.IsEvil and attacker:IsEvil())) and ((ply:GetRole() == ROLE_INNOCENT or ply:GetRole() == ROLE_DETECTIVE) or (ply.GetGood and (ply:GetGood() or ply:IsNeutral()))) then
-					attacker.SecondChanceChance = math.Clamp(attacker.SecondChanceChance + math.random(10, 20), 0, 99)
-				elseif (attacker:GetRole() == ROLE_DETECTIVE or (attacker.GetGood and attacker:GetGood())) and (ply:GetTraitor() or (ply.IsEvil and (ply:IsEvil() or ply:IsNeutral()))) then
-					attacker.SecondChanceChance = math.Clamp(attacker.SecondChanceChance + math.random(20, 30), 0, 99)
-				elseif attacker.IsNeutral and attacker:IsNeutral() and (ply:GetGood() or ply:GetEvil()) then
-					attacker.SecondChanceChance = math.Clamp(attacker.SecondChanceChance + math.random(15, 25), 0, 99)
-				end
-			elseif not ply:IsInTeam(attacker) then
+		if IsValid(attacker) and ply ~= attacker and attacker:IsPlayer() and attacker:HasEquipmentItem("item_ttt_asc") then
+			if not ply:IsInTeam(attacker) then
 				if attacker:GetTraitor() or attacker.IsEvil and attacker:IsEvil() then -- just normal Ts
 					attacker.SecondChanceChance = math.Clamp(attacker.SecondChanceChance + math.random(10, 20), 0, 99)
 				elseif attacker:HasTeam(TEAM_INNOCENT) then
@@ -349,7 +259,6 @@ local function ResettinAsc()
 		end
 	end
 end
-
 hook.Add("TTTPrepareRound", "ASCRESET", ResettinAsc)
 
 if CLIENT then
@@ -387,7 +296,6 @@ if CLIENT then
 			end
 		end
 	end
-
 	hook.Add("HUDPaint", "DrawASCHUD", DrawASCHUD)
 end
 
@@ -456,21 +364,5 @@ if CLIENT then
 		end
 
 		chat.PlaySound()
-	end)
-
-	hook.Add("TTTBodySearchEquipment", "ASCCorpseIcon", function(search, eq)
-		search.eq_asc = util.BitSet(eq, EQUIP_ASC)
-	end)
-
-	hook.Add("TTTBodySearchPopulate", "ASCCorpseIcon", function(search, raw)
-		if not raw.eq_asc then return end
-
-		local highest = 0
-
-		for _, v in pairs(search) do
-			highest = math.max(highest, v.p)
-		end
-
-		search.eq_asc = {img = "vgui/ttt/icon_asc", text = "They maybe will have a Second Chance...", p = highest + 1}
 	end)
 end
